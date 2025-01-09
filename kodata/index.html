@@ -1,22 +1,26 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Kubesimplify DevOps Project Completed!</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kubernetes project!</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
             background-color: #f4f4f4;
             color: #333;
+            margin: 0;
+            padding: 0;
         }
         .container {
-            width: 80%;
+            max-width: 800px;
             margin: 50px auto;
             background: #fff;
             padding: 20px;
             border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
         }
-        h2 {
+        h1 {
             text-align: center;
             color: #4CAF50;
             margin-bottom: 20px;
@@ -41,6 +45,7 @@
             background-color: #4CAF50;
             color: white;
             cursor: pointer;
+            margin-left: 10px;
         }
         button:hover {
             background-color: #45a049;
@@ -48,6 +53,7 @@
         .goal-list {
             list-style-type: none;
             padding: 0;
+            margin: 0;
         }
         .goal-item {
             margin: 10px 0;
@@ -71,6 +77,7 @@
         .logo {
             display: block;
             margin: 0 auto 20px;
+            max-width: 100px;
         }
         footer {
             text-align: center;
@@ -78,38 +85,40 @@
             font-size: 14px;
             color: #777;
         }
+        footer a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
+        footer a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <img src="https://avatars.githubusercontent.com/u/101195255?s=200&v=4" alt="Kubernetes Logo" class="logo">
-        <h2>Kubesimplify viewers are awesome!  </h2>
+        <!-- Uncomment the following line if a logo is required -->
+        <!-- <img src="https://avatars.githubusercontent.com/u/101195255?s=200&v=4" alt="Kubernetes Logo" class="logo"> -->
+        <h1>TO-DO LIST</h1>
         <form action="/add_goal" method="post">
             <input type="text" name="goal_name" placeholder="Enter your goal">
             <button type="submit">Add Goal</button>
         </form>
+
+        <!-- Goals list -->
         {{ if .goals }}
         <ul class="goal-list">
             {{ range .goals }}
-                <li class="goal-item">
-                    {{ .Name }}
-                    <form action="/remove_goal" method="post" style="display: inline;">
-                        <input type="hidden" name="goal_id" value="{{ .ID }}">
-                        <button type="submit" class="delete-button">Delete</button>
-                    </form>
-                </li>
+            <li class="goal-item">
+                <span>{{ .Name }}</span>
+                <form action="/remove_goal" method="post" style="display: inline;">
+                    <input type="hidden" name="goal_id" value="{{ .ID }}">
+                    <button type="submit" class="delete-button">Delete</button>
+                </form>
+            </li>
             {{ end }}
         </ul>
         {{ end }}
     </div>
-    <footer>
-        @saiyampathak
-    </footer>
-    <script>
-        document.querySelectorAll('form').forEach(form => {
-            form.onsubmit = () => setTimeout(() => location.reload(), 500); // Reload page after a short delay
-        });
-    </script>
-</body>
-</html>
 
+    <footer>
+        <p>

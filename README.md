@@ -1,30 +1,38 @@
-This repo is for the video below 
+# Go & Kubernates Project on AWS EKS with CI/CD and Monitoring
 
+This repository is for deploying a **Golang CRUD application** with **PostgreSQL RDS** on **Amazon EKS**. It includes a CI/CD pipeline with AWS CodeCommit, CodeBuild, and CodePipeline, and monitoring with Prometheus and Grafana. Load testing was performed using k6.
 
-[![Conplete DevOps Project](https://img.youtube.com/vi/kCWAwXFnYic/0.jpg)](https://www.youtube.com/watch?v=kCWAwXFnYic)
+## Running Locally
 
-# Running Locally 
-## Initialising for base image
-```
+### Initialize Base Image
+```bash
 bsf init
-``` 
-## Building OCI artifact using bsf and ko
 ```
-bsf oci pkgs --platform=linux/amd64 --tag=prod-v1 --push --dest-creds {Dockerhub username}:{dockerhub password}
-KO_DOCKER_REPO=saiyam911/devops-project KO_DEFAULTBASEIMAGE=saiyam911/devops-proj:base ko build --bare -t v1 . (change your image names here)
+
+### Build OCI Artifact with ECR
+```bash
+aws ecr create-repository --repository-name devops-project
+ECR_REPOSITORY_URI=$(aws ecr describe-repositories --repository-names devops-project --query "repositories[0].repositoryUri" --output text)
+
+$(aws ecr get-login --no-include-email --region us-east-1)
+
+docker build -t $ECR_REPOSITORY_URI:prod-v1 .
+docker push $ECR_REPOSITORY_URI:prod-v1
 ```
-## Running using Docker
-```
+
+### Running Using Docker
+```bash
 docker run -d --name grafana -p 3000:3000 grafana/grafana
 docker run -d --name prometheus -p 9090:9090 -v $(pwd)/prometheus.yml:/etc/prometheus/prometheus.yml prom/prometheus
 docker run --name local-postgres -e POSTGRES_USER=myuser -e POSTGRES_PASSWORD=mypassword -e POSTGRES_DB=mydb -p 5432:5432 -d postgres
+
 docker exec -it local-postgres psql -U myuser -d mydb
 CREATE TABLE goals (
     id SERIAL PRIMARY KEY,
     goal_name TEXT NOT NULL
 );
+
 docker run -d \
-  --platform=linux/amd64 \
   -p 8080:8080 \
   -e DB_USERNAME=myuser \
   -e DB_PASSWORD=mypassword \
@@ -32,126 +40,94 @@ docker run -d \
   -e DB_PORT=5432 \
   -e DB_NAME=mydb \
   -e SSL=disable \
- ttl.sh/devops-project-1a3a3957a5f042748486580be307ed8e@sha256:9ae320cdf05700210dd50ebefa6b3cd4a11ca2feaad1946f6715e0ec725bda62
+  $ECR_REPOSITORY_URI:prod-v1
 ```
 
-## Cluster creatiom 
-```ksctl create-cluster azure --name=application --version=1.29```
+---
 
-## Switching the KubeConfig file 
-```ksctl switch-cluster --provider azure --region eastus --name devops-project```
+## Cluster Creation on AWS EKS
+### Create the EKS Cluster
+```bash
+eksctl create cluster --name devops-project --version 1.29 --region us-east-1
+```
 
-## Exporting Kubeconfig
-```export KUBECONFIG="/Users/saiyam/.ksctl/kubeconfig"```              
+### Configure Kubeconfig
+```bash
+aws eks update-kubeconfig --region us-east-1 --name devops-project
+```
 
-## Installing basic componenets cert manager, nginx fabric for gateway API, Prometheus. for monitoring and Grafana for visualization. 
-### Cert manager
-```
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.3/cert-manager.yaml
-```
-Edit cert-manager deployment 
-```
-- --enable-gateway-api
-```
-```kubectl rollout restart deployment cert-manager -n cert-manager```
+---
 
-### Install Kube prometheus stack
-```
+## Deploying Components
+
+### Install Monitoring Stack (Prometheus and Grafana)
+```bash
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo update
 helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack --namespace monitoring --create-namespace
-
 ```
-### Getting Grafana login secret for admin user
 
-```
+#### Access Grafana
+Retrieve the admin password:
+```bash
 kubectl get secret --namespace monitoring kube-prometheus-stack-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
+```
+
+Port-forward Grafana to access it locally:
+```bash
 kubectl port-forward svc/grafana 3000:80 -n monitoring
 ```
 
-## Install Nginx fabric gateway
-```
-kubectl kustomize "https://github.com/nginxinc/nginx-gateway-fabric/config/crd/gateway-api/standard?ref=v1.3.0" | kubectl apply -f -
-helm install ngf oci://ghcr.io/nginxinc/charts/nginx-gateway-fabric --create-namespace -n nginx-gateway
+### Deploy PostgreSQL Database on AWS RDS
+Provision a PostgreSQL RDS instance via the AWS Management Console or AWS CLI and ensure the database is publicly accessible. Update the application with the RDS endpoint.
+
+### Create Kubernetes Secrets for Database Credentials
+```bash
+kubectl create secret generic rds-credentials \                                      
+  --from-literal=DB_HOST=database-1.cx4uii88iaxq.us-east-1.rds.amazonaws.com \
+  --from-literal=DB_PORT=5432 \
+  --from-literal=DB_USER=myuser \
+  --from-literal=DB_PASSWORD=mypassword\
+  --from-literal=DB_NAME=mydb
 ```
 
-
-## Install Cloudnative postgress DB 
-```
-kubectl apply --server-side -f https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/release-1.23/releases/cnpg-1.23.1.yaml
-```
-```
-cat << EOF | kubectl apply -f -
-apiVersion: postgresql.cnpg.io/v1
-kind: Cluster
-metadata:
-  name: my-postgresql
-  namespace: default
-spec:
-  instances: 3
-  storage:
-    size: 1Gi
-  bootstrap:
-    initdb:
-      database: goals_database
-      owner: goals_user
-      secret:
-        name: my-postgresql-credentials
-EOF        
-```
-### Creating secret for cluster
-```
-kubectl create secret generic my-postgresql-credentials --from-literal=password='new_password'  --from-literal=username='goals_user'  --dry-run=client -o yaml | kubectl apply -f -
-kubectl exec -it my-postgresql-1 -- psql -U postgres -c "ALTER USER goals_user WITH PASSWORD 'new_password';"
+### Deploy the Application
+Update the Kubernetes deployment file with your Docker image and database secrets. Then deploy the application:
+```bash
+kubectl apply -f deploy/deploy.yaml
 ```
 
-### Creating Table inside the database
-```
-kubectl port-forward my-postgresql-1 5432:5432
-PGPASSWORD='new_password' psql -h 127.0.0.1 -U goals_user -d goals_database -c "
+---
 
-CREATE TABLE goals (
-    id SERIAL PRIMARY KEY,
-    goal_name VARCHAR(255) NOT NULL
-);
-"
-```
+## CI/CD Pipeline Setup
 
-### Create secret to be used by the application 
-```
-cat << EOF | kubectl apply -f - 
-apiVersion: v1
-kind: Secret
-metadata:
-  name: postgresql-credentials
-type: Opaque
-data:
-  password: bmV3X3Bhc3N3b3Jk
-  username: Z29hbHNfdXNlcg==
-EOF
+### AWS CodePipeline Workflow:
+1. **CodeCommit**: Repository for managing the source code.
+2. **CodeBuild**: Builds the Docker image for the application.
+3. **CodePipeline**: Orchestrates the workflow from CodeCommit to EKS deployment.
+
+### Steps:
+- Create a **CodeCommit** repository and push your code.
+- Configure **CodeBuild** to build and push Docker images to Amazon ECR.
+- Set up **CodePipeline** to deploy the updated Docker image to EKS using `kubectl`.
+
+You can follow this [tutorial](https://devopslearning.medium.com/ci-cd-pipeline-for-eks-using-codecommit-codebuild-codepipeline-and-elastic-container-100f4b85e434) for a step-by-step guide to setting up the CI/CD pipeline.
+
+---
+
+## Load Testing with k6
+### Run Load Test
+```bash
+k6 run load.js
 ```
 
+---
 
-### Application deployment(Currently this has the gateway for both Argocd and the application)
-```
-kubectl apply -f deploy/deploy,yaml
-```
+## Monitoring
+### Prometheus and Grafana
+Prometheus scrapes metrics, and Grafana visualizes them. Use the dashboards to monitor:
+- CPU/Memory usage
+- Request latencies
+- Database performance
 
-## Argocd installation 
-```
-kubectl create namespace argocd
-kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
-kubectl patch configmap argocd-cmd-params-cm  -n argocd --patch '{"data":{"server.insecure":"true"}}'
-kubectl rollout restart deployment argocd-server -n argocd
-kubectl get secret --namespace argocd argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 --decode ; echo 
-```
-
-## Create Route for ArgoCD 
-```
-kubectl apply -f route-argo.yaml
-kubectl apply -f referencegrant
-```
-## Load testing 
-```
-k6s run load.js
-```
+---

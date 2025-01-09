@@ -1,0 +1,54 @@
+version: 0.2
+phases:
+  install:
+    commands:
+      - echo "Install Phase - Add additional packages if needed"
+  pre_build:
+    commands:
+      # Generate Docker Image Tag with Date, Time, and CodeCommit Revision
+      - TAG="latest"
+      # Update Docker Image Tag in Kubernetes Deployment Manifest
+      - echo "Updating image tag in Kubernetes manifest"
+      - sed -i 's@CONTAINER_IMAGE@'"$REPOSITORY_URI:$TAG"'@' deploy/deploy.yaml
+      # Check AWS CLI Version
+      - echo "Checking AWS CLI Version..."
+      - aws --version
+      # Login to ECR
+      - echo "Logging in to Amazon ECR..."
+      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $REPOSITORY_URI
+  build:
+    commands:
+      # Build Docker Image
+      - echo "Starting Docker build on $(date)"
+      - echo "Building Docker image..."
+      - docker build --tag $REPOSITORY_URI:$TAG .
+  post_build:
+    commands:
+      # Push Docker Image to ECR Repository
+      - echo "Docker build completed. Pushing image to ECR..."
+      - docker push $REPOSITORY_URI:$TAG
+      - echo "Docker image pushed successfully:$REPOSITORY_URI:$TAG"
+      # Assume Role for Kubernetes Access
+      - echo "Assuming IAM Role for Kubernetes access..."
+      # - echo $EKS_ROLE_ARN
+      - CREDENTIALS=$(aws sts assume-role --role-arn arn:aws:iam::851725569258:role/AmazonEKSAutoClusterRole --role-session-name eks-codebuild --duration-seconds 900)
+      - export AWS_ACCESS_KEY_ID="$(echo ${CREDENTIALS} | jq -r '.Credentials.AccessKeyId')"
+      - export AWS_SECRET_ACCESS_KEY="$(echo ${CREDENTIALS} | jq -r '.Credentials.SecretAccessKey')"
+      - export AWS_SESSION_TOKEN="$(echo ${CREDENTIALS} | jq -r '.Credentials.SessionToken')"
+      - export AWS_EXPIRATION="$(echo ${CREDENTIALS} | jq -r '.Credentials.Expiration')"
+      # Update Kubernetes Configuration
+      - echo "Updating kubeconfig for EKS cluster..."
+      - aws eks update-kubeconfig --name $EKS_CLUSTERNAME --region us-east-1
+      # Apply Kubernetes manifests
+      - echo "Applying Kubernetes manifests..."
+      - kubectl apply -f deploy/deploy.yaml
+      - echo "Kubernetes changes applied successfully!"
+      # Verify the service status
+      - echo "Fetching details of the service my-app-service..."
+      - kubectl get service my-app-service
+      # Create artifacts for downstream stages
+      - printf '[{"name":"deployment.yaml","imageUri":"%s"}]' $REPOSITORY_URI:$TAG > build.json
+artifacts:
+  files: 
+    - build.json
+    - deploy/*

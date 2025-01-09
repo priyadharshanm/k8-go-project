@@ -7,7 +7,7 @@ export const options = {
   duration: '30s',
 };
 
-const BASE_URL = 'https://app.kubesimplify.com'
+const BASE_URL = 'http://a3a08bcbb569c4c6592ab465d70d1f07-504915362.us-east-1.elb.amazonaws.com/'
 
 function demo() {
   const url = `${BASE_URL}`;
