@@ -1,5 +1,7 @@
 # Go & Kubernates Project on AWS EKS with CI/CD and Monitoring
 
+![Flowchart](images/flowchart.png)
+
 This repository is for deploying a **Golang CRUD application** with **PostgreSQL RDS** on **Amazon EKS**. It includes a CI/CD pipeline with AWS CodeCommit, CodeBuild, and CodePipeline, and monitoring with Prometheus and Grafana. Load testing was performed using k6.
 
 ## Running Locally
